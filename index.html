@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数字货币合约历史K线查询</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- 引入 TradingView Lightweight Charts (固定版本 4.1.1 避免新版 API 不兼容) -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>数字货币合约历史K线查询</h1>
+            <div class="controls">
+                <div class="input-group">
+                    <label for="symbol">合约代码 (U本位):</label>
+                    <input type="text" id="symbol" value="BTCUSDT" placeholder="例如: BTCUSDT">
+                </div>
+                <div class="input-group">
+                    <label for="interval">时间粒度:</label>
+                    <select id="interval">
+                        <option value="12h" selected>12小时 (12h)</option>
+                        <option value="1w">1周 (1w)</option>
+                        <option value="1day">1天 (1d)</option>
+                        <option value="4hour">4小时 (4h)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="api-node">数据节点(防屏蔽):</label>
+                    <select id="api-node">
+                        <option value="local">币安 - 本地加速代理 (强烈推荐: 最快，需运行 server.py)</option>
+                        <option value="kucoin">Kucoin - 本地代理 (备用: 需运行 server.py, 支持12h)</option>
+                        <option value="https://fapi.binance.info">币安 - 备用节点 (直连尝试)</option>
+                        <option value="codetabs">币安 - 免费代理 (Codetabs HTTP 穿透)</option>
+                        <option value="htx">火币 HTX 接口 (备用，不支持12h)</option>
+                    </select>
+                </div>
+                <button id="fetch-btn">查询数据</button>
+                <button id="scan-top10-btn" style="background-color: #d32f2f; margin-left: 10px;">扫描强势 Top10 (1w)</button>
+            </div>
+        </header>
+        
+        <div class="main-layout">
+            <div id="sidebar" class="hidden">
+                <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; color: var(--text-color);">强势多头 Top 10</h3>
+                <div id="top10-list"></div>
+            </div>
+            <div class="chart-container">
+                <div id="loading" class="hidden">加载中...</div>
+                <div id="error-message" class="hidden"></div>
+                <div id="chart"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
