@@ -265,6 +265,14 @@ async function handleFetch() {
             throw new Error('未获取到该合约的数据');
         }
 
+        const getDefaultVisibleBars = (intervalValue) => {
+            if (intervalValue === '1w') return 80;
+            if (intervalValue === '1day') return 120;
+            if (intervalValue === '12h') return 160;
+            if (intervalValue === '4hour') return 180;
+            return 120;
+        };
+
         // 重新初始化图表并设置数据
         initChart();
         candlestickSeries.setData(data);
@@ -275,9 +283,17 @@ async function handleFetch() {
             value: item.close
         }));
         ma1Series.setData(ma1Data);
-        
-        // 自动适应屏幕显示所有数据
-        chart.timeScale().fitContent();
+
+        // 默认放大显示最近一段K线，避免每次手动缩放
+        const visibleBars = getDefaultVisibleBars(interval);
+        if (data.length > visibleBars) {
+            chart.timeScale().setVisibleLogicalRange({
+                from: data.length - visibleBars,
+                to: data.length - 1,
+            });
+        } else {
+            chart.timeScale().fitContent();
+        }
         
         if (top10List && top10List.children.length > 0) {
             const children = Array.from(top10List.children);
