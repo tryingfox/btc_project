@@ -58,25 +58,29 @@ class ProxyHTTPRequestHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode('utf-8'))
             return
 
-        # 新增：扫描周线强势品种 Top10
-        if self.path == '/api/scan_top10':
-            print("正在后台扫描周线宏观强势品种...")
+        if self.path.startswith('/api/scan_top10'):
+            import urllib.parse
+            qs = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(qs)
+            interval = params.get('interval', ['1w'])[0]
+            if interval in ('1day', '1d', 'day'):
+                interval = '1d'
+            else:
+                interval = '1w'
             try:
                 import scan_macro_1w
-                top10 = scan_macro_1w.run_scan()
+                top10 = scan_macro_1w.run_scan(interval=interval)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps(top10).encode('utf-8'))
-                print("扫描完成并返回结果")
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
-                print(f"扫描失败: {e}")
             return
 
         # 拦截 /kucoin/ 开头的请求
@@ -153,6 +157,8 @@ class ProxyHTTPRequestHandler(SimpleHTTPRequestHandler):
             symbol = params.get('symbol', [''])[0]
             interval = params.get('interval', [''])[0]
             limit = params.get('limit', ['500'])[0]
+            if interval == '1day':
+                interval = '1d'
             
             target_url_encoded = urllib.parse.quote(f"http://fapi.binance.com{self.path}", safe='')
             

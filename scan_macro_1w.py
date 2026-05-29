@@ -5,10 +5,21 @@ import urllib.parse
 
 urllib3.disable_warnings()
 
-def fetch_data(path, symbol=""):
+def _normalize_interval(interval):
+    if interval in ("1day", "1d", "day"):
+        return "1d"
+    return "1w"
+
+def _get_limits(interval):
+    if interval == "1d":
+        return {"limit": 61, "idx_short": 20, "idx_long": 60, "badge": "20d"}
+    return {"limit": 13, "idx_short": 4, "idx_long": 12, "badge": "4w"}
+
+def fetch_data(path, symbol="", interval="1w", limit=13):
+    interval = _normalize_interval(interval)
     # 策略1：币安公有现货数据节点 (最快，国内通常不墙)
     # 虽然是现货，但 1w 的宏观趋势与合约几乎完全一致
-    url_spot = f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval=1w&limit=13"
+    url_spot = f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
     try:
         resp = requests.get(url_spot, timeout=5, verify=False)
         if resp.status_code == 200:
@@ -18,7 +29,8 @@ def fetch_data(path, symbol=""):
 
     # 策略2：Gate.io 合约节点 (备用，国内通常不墙)
     gate_symbol = symbol.replace('USDT', '_USDT')
-    url_gate = f"https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract={gate_symbol}&interval=7d&limit=13"
+    gate_interval = "7d" if interval == "1w" else "1d"
+    url_gate = f"https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract={gate_symbol}&interval={gate_interval}&limit={limit}"
     try:
         resp = requests.get(url_gate, timeout=5, verify=False)
         if resp.status_code == 200:
@@ -29,7 +41,7 @@ def fetch_data(path, symbol=""):
         pass
 
     # 策略3：币安合约节点 (可能被墙)
-    url_fapi = f"https://fapi.binance.info/fapi/v1/klines?symbol={symbol}&interval=1w&limit=13"
+    url_fapi = f"https://fapi.binance.info/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}"
     try:
         resp = requests.get(url_fapi, timeout=5, verify=False, proxies={"http": None, "https": None})
         if resp.status_code == 200:
@@ -38,7 +50,7 @@ def fetch_data(path, symbol=""):
         pass
         
     # 策略4：免费代理
-    url_proxy = "http://api.codetabs.com/v1/proxy/?quest=" + urllib.parse.quote(f"http://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval=1w&limit=13", safe='')
+    url_proxy = "http://api.codetabs.com/v1/proxy/?quest=" + urllib.parse.quote(f"http://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}", safe='')
     try:
         resp = requests.get(url_proxy, timeout=10, verify=False)
         if resp.status_code == 200:
@@ -71,15 +83,20 @@ def get_symbols():
     return []
 
 def get_macro_trend(symbol):
-    klines = fetch_data("", symbol)
-    if klines and len(klines) >= 13:
+    interval = "1w"
+    if isinstance(symbol, tuple):
+        symbol, interval = symbol
+    interval = _normalize_interval(interval)
+    cfg = _get_limits(interval)
+    klines = fetch_data("", symbol, interval=interval, limit=cfg["limit"])
+    if klines and len(klines) >= cfg["limit"]:
         # MA1 is just the close prices
         closes = [float(k[4]) for k in klines]
         
         current_close = closes[-1]
         close_1w_ago = closes[-2]
-        close_4w_ago = closes[-5]
-        close_12w_ago = closes[-13]
+        close_4w_ago = closes[-(cfg["idx_short"] + 1)]
+        close_12w_ago = closes[-(cfg["idx_long"] + 1)]
         
         chg_1w = (current_close - close_1w_ago) / close_1w_ago * 100
         chg_4w = (current_close - close_4w_ago) / close_4w_ago * 100
@@ -90,6 +107,8 @@ def get_macro_trend(symbol):
         
         return {
             "symbol": symbol,
+            "interval": interval,
+            "badge_label": cfg["badge"],
             "chg_1w": chg_1w,
             "chg_4w": chg_4w,
             "chg_12w": chg_12w,
@@ -99,14 +118,15 @@ def get_macro_trend(symbol):
         }
     return None
 
-def run_scan():
+def run_scan(interval="1w"):
+    interval = _normalize_interval(interval)
     symbols = get_symbols()
     if not symbols:
         return []
     
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        futures = {executor.submit(get_macro_trend, sym): sym for sym in symbols}
+        futures = {executor.submit(get_macro_trend, (sym, interval)): sym for sym in symbols}
         for f in concurrent.futures.as_completed(futures):
             res = f.result()
             if res:

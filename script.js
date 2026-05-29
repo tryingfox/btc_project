@@ -80,6 +80,7 @@ async function fetchKlines(symbol, interval, nodeOverride = null) {
     const limit = 500;
     const apiNode = nodeOverride || apiNodeSelect.value;
     let url = '';
+    const normalizedInterval = interval === '1day' ? '1d' : (interval === '4hour' ? '4h' : interval);
     
     // 构建不同节点的请求URL
     let useAlternativeApi = false;
@@ -158,19 +159,19 @@ async function fetchKlines(symbol, interval, nodeOverride = null) {
             })).reverse(); // Kucoin 也是倒序
         };
     } else if (apiNode === 'proxy1') {
-        const targetUrl = encodeURIComponent(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`);
+        const targetUrl = encodeURIComponent(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${normalizedInterval}&limit=${limit}`);
         url = `https://api.allorigins.win/raw?url=${targetUrl}`;
     } else if (apiNode === 'proxy2') {
-        const targetUrl = encodeURIComponent(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`);
+        const targetUrl = encodeURIComponent(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${normalizedInterval}&limit=${limit}`);
         url = `https://corsproxy.io/?${targetUrl}`;
     } else if (apiNode === 'codetabs') {
         // 使用 HTTP 版本的代理和目标地址以规避严格的 SSL 拦截
-        const targetUrl = encodeURIComponent(`http://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`);
+        const targetUrl = encodeURIComponent(`http://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${normalizedInterval}&limit=${limit}`);
         url = `http://api.codetabs.com/v1/proxy/?quest=${targetUrl}`;
     } else if (apiNode === 'local') {
-        url = `${API_BASE}/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
+        url = `${API_BASE}/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${normalizedInterval}&limit=${limit}`;
     } else {
-        url = `${apiNode}/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
+        url = `${apiNode}/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${normalizedInterval}&limit=${limit}`;
     }
 
     try {
@@ -278,12 +279,11 @@ async function handleFetch() {
         // 自动适应屏幕显示所有数据
         chart.timeScale().fitContent();
         
-        // 同步侧栏高亮：如果列表中存在当前合约，保持蓝色选中态
         if (top10List && top10List.children.length > 0) {
             const children = Array.from(top10List.children);
             let matched = null;
             children.forEach(btn => {
-                if (btn.dataset && btn.dataset.symbol === symbol) {
+                if (btn.dataset && btn.dataset.symbol === symbol && btn.dataset.interval === interval) {
                     matched = btn;
                 } else {
                     btn.classList.remove('active');
@@ -325,13 +325,21 @@ const sidebar = document.getElementById('sidebar');
 const top10List = document.getElementById('top10-list');
 
 scanTop10Btn.addEventListener('click', async () => {
+    const selectedInterval = intervalSelect.value === '1w' ? '1w' : '1day';
+    const scanIntervalParam = selectedInterval === '1w' ? '1w' : '1day';
+    const scanIntervalDisplay = selectedInterval === '1w' ? '1w' : '1d';
+    const sidebarTitle = sidebar.querySelector('h3');
+    if (sidebarTitle) {
+        sidebarTitle.textContent = `强势多头 Top 10 (${scanIntervalDisplay})`;
+    }
+
     scanTop10Btn.disabled = true;
-    scanTop10Btn.textContent = '正在扫描全市场...';
+    scanTop10Btn.textContent = `正在扫描全市场... (${scanIntervalDisplay})`;
     sidebar.classList.remove('hidden');
-    top10List.innerHTML = '<div style="color: #2962ff; text-align: center; padding: 20px;">正在扫描500+合约周线结构<br>预计需要10-15秒...</div>';
+    top10List.innerHTML = `<div style="color: #2962ff; text-align: center; padding: 20px;">正在扫描500+合约结构 (${scanIntervalDisplay})<br>预计需要10-60秒...</div>`;
 
     try {
-        const response = await fetch(`${API_BASE}/api/scan_top10`);
+        const response = await fetch(`${API_BASE}/api/scan_top10?interval=${encodeURIComponent(scanIntervalParam)}`);
         if (!response.ok) {
             throw new Error('扫描失败');
         }
@@ -345,6 +353,7 @@ scanTop10Btn.addEventListener('click', async () => {
                 window.__activeTop10Btn = null;
             }
             btn.dataset.symbol = item.symbol;
+            btn.dataset.interval = scanIntervalParam;
             
             const nameSpan = document.createElement('span');
             nameSpan.className = 'symbol-name';
@@ -352,7 +361,8 @@ scanTop10Btn.addEventListener('click', async () => {
             
             const scoreSpan = document.createElement('span');
             scoreSpan.className = 'score-badge';
-            scoreSpan.textContent = `+${item.chg_4w.toFixed(1)}%`;
+            const badgeValue = typeof item.chg_4w === 'number' ? item.chg_4w : (item.badge_value ?? 0);
+            scoreSpan.textContent = `+${Number(badgeValue).toFixed(1)}%`;
             
             btn.appendChild(nameSpan);
             btn.appendChild(scoreSpan);
@@ -365,7 +375,7 @@ scanTop10Btn.addEventListener('click', async () => {
                 window.__activeTop10Btn = btn;
                 
                 symbolInput.value = item.symbol;
-                intervalSelect.value = '1w'; // 自动切换到1w
+                intervalSelect.value = scanIntervalParam;
                 
                 // 如果当前使用的是 Kucoin 或 HTX，自动切换到币安节点（因为扫描出的都是币安合约）
                 const currentNode = apiNodeSelect.value;
@@ -379,18 +389,17 @@ scanTop10Btn.addEventListener('click', async () => {
             top10List.appendChild(btn);
         });
 
-        // 服务端预热缓存 + 前端本地并发预热，双重保障“秒开”
         if (data.length > 0) {
             const symbols = data.map(x => x.symbol).join(',');
-            fetch(`${API_BASE}/api/preload?symbols=${encodeURIComponent(symbols)}&interval=1w&limit=500`).catch(()=>{});
+            fetch(`${API_BASE}/api/preload?symbols=${encodeURIComponent(symbols)}&interval=${encodeURIComponent(scanIntervalParam)}&limit=500`).catch(()=>{});
         }
         data.forEach((item, idx) => {
-            const cacheKey = `${item.symbol}_1w`;
+            const cacheKey = `${item.symbol}_${scanIntervalParam}`;
             if (!klineDataCache[cacheKey]) {
                 klineDataCache[cacheKey] = new Promise((resolve, reject) => {
                     const delay = idx < 3 ? idx * 200 : 800 + (idx - 3) * 400;
                     setTimeout(() => {
-                        fetchKlines(item.symbol, '1w', 'local')
+                        fetchKlines(item.symbol, scanIntervalParam, 'local')
                             .then(klineData => {
                                 resolve(klineData);
                             })
@@ -403,7 +412,6 @@ scanTop10Btn.addEventListener('click', async () => {
             }
         });
         
-        // 自动选中并加载第一个品种
         if (data.length > 0 && top10List.firstChild) {
             top10List.firstChild.click();
         }
@@ -412,7 +420,7 @@ scanTop10Btn.addEventListener('click', async () => {
         top10List.innerHTML = `<div style="color: #ef5350; text-align: center;">${err.message}</div>`;
     } finally {
         scanTop10Btn.disabled = false;
-        scanTop10Btn.textContent = '扫描强势 Top10 (1w)';
+        scanTop10Btn.textContent = `扫描强势 Top10 (${scanIntervalDisplay})`;
     }
 });
 
