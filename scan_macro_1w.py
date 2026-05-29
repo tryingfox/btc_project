@@ -118,7 +118,7 @@ def get_macro_trend(symbol):
         }
     return None
 
-def run_scan(interval="1w"):
+def run_scan(interval="1w", top_n=30):
     interval = _normalize_interval(interval)
     symbols = get_symbols()
     if not symbols:
@@ -134,7 +134,7 @@ def run_scan(interval="1w"):
                 
     bullish_candidates = [r for r in results if r['is_bullish']]
     bullish_candidates.sort(key=lambda x: x['score'], reverse=True)
-    return bullish_candidates[:10]
+    return bullish_candidates[:top_n]
 
 if __name__ == "__main__":
     print("正在扫描全市场周线 (MA1) 宏观趋势结构...")
@@ -163,13 +163,13 @@ if __name__ == "__main__":
     bullish_candidates.sort(key=lambda x: x['score'], reverse=True)
     
     print("\n" + "="*60)
-    print("📈 基于周线 MA1 结构选出的 TOP 10 强势多头品种 📈")
+    print("📈 基于周线 MA1 结构选出的 TOP 30 强势多头品种 📈")
     print("条件: 12周重心上移 (长牛) 且 4周重心上移 (近一个月未破位)")
     print("="*60)
     print(f"{'合约':<12} | {'本周涨跌':>8} | {'近4周结构涨幅':>12} | {'近12周宏观涨幅':>12}")
     print("-" * 60)
     
-    for i, r in enumerate(bullish_candidates[:10]):
+    for i, r in enumerate(bullish_candidates[:30]):
         print(f"{i+1:2d}. {r['symbol']:<9} | {r['chg_1w']:>7.2f}% | {r['chg_4w']:>11.2f}% | {r['chg_12w']:>11.2f}%")
         
     print("\n" + "="*60)

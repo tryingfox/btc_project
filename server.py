@@ -69,7 +69,7 @@ class ProxyHTTPRequestHandler(SimpleHTTPRequestHandler):
                 interval = '1w'
             try:
                 import scan_macro_1w
-                top10 = scan_macro_1w.run_scan(interval=interval)
+                top10 = scan_macro_1w.run_scan(interval=interval, top_n=30)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')

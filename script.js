@@ -330,7 +330,7 @@ scanTop10Btn.addEventListener('click', async () => {
     const scanIntervalDisplay = selectedInterval === '1w' ? '1w' : '1d';
     const sidebarTitle = sidebar.querySelector('h3');
     if (sidebarTitle) {
-        sidebarTitle.textContent = `强势多头 Top 10 (${scanIntervalDisplay})`;
+        sidebarTitle.textContent = `强势多头 Top 30 (${scanIntervalDisplay})`;
     }
 
     scanTop10Btn.disabled = true;
@@ -420,7 +420,7 @@ scanTop10Btn.addEventListener('click', async () => {
         top10List.innerHTML = `<div style="color: #ef5350; text-align: center;">${err.message}</div>`;
     } finally {
         scanTop10Btn.disabled = false;
-        scanTop10Btn.textContent = `扫描强势 Top10 (${scanIntervalDisplay})`;
+        scanTop10Btn.textContent = `扫描强势 Top30 (${scanIntervalDisplay})`;
     }
 });
 
